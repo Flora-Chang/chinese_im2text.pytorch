@@ -35,6 +35,8 @@ import torch
 import torchvision.models as models
 from torch.autograd import Variable
 import skimage.io
+import sys
+sys.path.append("/search/ffz/projects/ai_challenge/chinese_im2text.pytorch/")
 
 from torchvision import transforms as trn
 
@@ -43,7 +45,7 @@ preprocess = trn.Compose([
     trn.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-from misc.cnn.resnet_utils import myResnet
+from misc.resnet_utils import myResnet
 import jieba
 
 def prepro_captions(imgs):
@@ -52,12 +54,12 @@ def prepro_captions(imgs):
     for i, img in enumerate(imgs):
         img['processed_tokens'] = []
         for j, s in enumerate(img['captions']):
-            txt = []
-            for sentence in s:
-                txt.append("".join(jieba.cut(sentence)))
+            '''modified by ffz'''
+            #for sentence in s:
+            txt= list(jieba.cut(s))
             #txt = str(s).lower().translate(None, string.punctuation).strip().split()
             img['processed_tokens'].append(txt)
-            if i < 10 and j == 0: print txt
+            if i < 10 and j == 0: print str(txt).decode('unicode_escape')
 
 
 def build_vocab(imgs, params):
@@ -66,19 +68,19 @@ def build_vocab(imgs, params):
     # count up the number of words
     counts = {}
     for img in imgs:
-        for txt in img['processed_tokens']:
-            for s in txt:
-                for w in s:
-                    counts[w] = counts.get(w, 0) + 1
+        '''modified by ffz'''
+        for s in img['processed_tokens']:
+            for w in s:
+                counts[w] = counts.get(w, 0) + 1
     cw = sorted([(count, w) for w, count in counts.iteritems()], reverse=True)
     print 'top words and their counts:'
-    print '\n'.join(map(str, cw[:20]))
+    print '\n'.join(map(str, cw[:20])).decode('unicode_escape')
 
     # print some stats
     total_words = sum(counts.itervalues())
     print 'total words:', total_words
-    bad_words = [w for w, n in counts.iteritems() if n <= count_thr]
-    vocab = [w for w, n in counts.iteritems() if n > count_thr]
+    bad_words = [w for w, n in counts.iteritems() if n < count_thr]
+    vocab = [w for w, n in counts.iteritems() if n >= count_thr]
     bad_count = sum(counts[w] for w in bad_words)
     print 'number of bad words: %d/%d = %.2f%%' % (len(bad_words), len(counts), len(bad_words) * 100.0 / len(counts))
     print 'number of words in vocab would be %d' % (len(vocab),)
@@ -87,10 +89,9 @@ def build_vocab(imgs, params):
     # lets look at the distribution of lengths as well
     sent_lengths = {}
     for img in imgs:
-        for txt in img['processed_tokens']:
-            for sentence in txt:
-                nw = len(sentence)
-                sent_lengths[nw] = sent_lengths.get(nw, 0) + 1
+        for sentence in img['processed_tokens']:
+            nw = len(sentence)
+            sent_lengths[nw] = sent_lengths.get(nw, 0) + 1
     max_len = max(sent_lengths.keys())
     print 'max length sentence in raw data: ', max_len
     print 'sentence length distribution (count, number of words):'
@@ -104,20 +105,18 @@ def build_vocab(imgs, params):
         print 'inserting the special UNK token'
         vocab.append('UNK')
 
+    '''modified by ffz'''
     for img in imgs:
         img['final_captions'] = []
-        for txt in img['processed_tokens']:
-            caption = []
-            for s in txt:
-                s_ = []
-                for w in s:
-                    if counts.get(w, 0) > count_thr:
-                        s_.append(w)
-                    else:
-                        s_.append('UNK')
-            caption.append(s_)
+        for s in img['processed_tokens']:
+            s_ = []
+            for w in s:
+                if counts.get(w, 0) >= count_thr:
+                    s_.append(w)
+                else:
+                    s_.append('UNK')
                 #caption = [w if counts.get(w, 0) > count_thr else 'UNK' for w in txt]
-        img['final_captions'].append(caption)
+            img['final_captions'].append(s_)
 
     return vocab
 
@@ -126,7 +125,7 @@ def assign_splits(imgs, params):
   num_test = params['num_test']
 
   for i,img in enumerate(imgs):
-      if 'val' in img['file_path']:
+      if 'val' in img['filepath']:
         img['split'] = 'val'
       else:
         img['split'] = 'train'
@@ -161,12 +160,11 @@ def encode_captions(imgs, params, wtoi):
 
         Li = np.zeros((n, max_length), dtype='uint32')
         for j, s in enumerate(img['final_captions']):
-            for sentence in s:
-                label_length[caption_counter] = min(max_length, len(sentence))  # record the length of this sequence
-                caption_counter += 1
-                for k, w in enumerate(sentence):
-                    if k < max_length:
-                        Li[j, k] = wtoi[w]
+            label_length[caption_counter] = min(max_length, len(s))  # record the length of this sequence
+            caption_counter += 1
+            for k, w in enumerate(s):
+                if k < max_length:
+                    Li[j, k] = wtoi[w]
 
         # note: word indices are 1-indexed, and captions are padded with zeros
         label_arrays.append(Li)
@@ -201,14 +199,14 @@ def main(params):
     # encode captions in large arrays, ready to ship to hdf5 file
     L, label_start_ix, label_end_ix, label_length = encode_captions(imgs, params, wtoi)
 
-    import misc.cnn.resnet as resnet
-    resnet_type = 'resnet151'
+    import misc.resnet as resnet
+    resnet_type = 'resnet101'
     if resnet_type == 'resnet101':
         resnet = resnet.resnet101()
-        resnet.load_state_dict(torch.load('resnet/resnet101.pth'))
+        resnet.load_state_dict(torch.load('../resnet/resnet101.pth'))
     else:
         resnet = resnet.resnet152()
-        resnet.load_state_dict(torch.load('resnet/resnet152.pth'))
+        resnet.load_state_dict(torch.load('../resnet/resnet152.pth'))
     my_resnet = myResnet(resnet)
     my_resnet.cuda()
     my_resnet.eval()
@@ -228,7 +226,7 @@ def main(params):
     dset_att = f_att.create_dataset("att", (N, 14, 14, 2048), dtype='float32')
     for i, img in enumerate(imgs):
         # load the image
-        I = skimage.io.imread(os.path.join(params['images_root'], img['file_path']))
+        I = skimage.io.imread(os.path.join(os.path.join(params['images_root'], img['filepath']), img['filename']))
         # handle grayscale input images
         if len(I.shape) == 2:
             I = I[:, :, np.newaxis]
@@ -255,7 +253,7 @@ def main(params):
 
         jimg = {}
         jimg['split'] = img['split']
-        if 'file_path' in img: jimg['file_path'] = img['file_path']  # copy it over, might need
+        if 'filepath' in img: jimg['filepath'] = img['filepath']  # copy it over, might need
         if 'id' in img: jimg['id'] = img['id']  # copy over & mantain an id, if present (e.g. coco ids, useful)
 
         out['images'].append(jimg)
@@ -268,17 +266,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # input json
-    parser.add_argument('--input_json', default='/home/vtt/dataset/ai_challenger/coco_ai_challenger_raw.json',
+    parser.add_argument('--input_json', default='../data/ai_challenger/coco_ai_challenger_raw.json',
                         help='input json file to process into hdf5')
     parser.add_argument('--num_val', default=30000, type=int,
                         help='number of images to assign to validation data (for CV etc)')
-    parser.add_argument('--output_json', default='/home/vtt/dataset/ai_challenger/coco_ai_challenger_talk.json', help='output json file')
-    parser.add_argument('--output_h5', default='/home/vtt/dataset/ai_challenger/coco_ai_challenger_talk', help='output h5 file')
+    parser.add_argument('--output_json', default='../data/ai_challenger/coco_ai_challenger_talk.json', help='output json file')
+    parser.add_argument('--output_h5', default='../data/ai_challenger/coco_ai_challenger_talk', help='output h5 file')
 
     # options
-    parser.add_argument('--max_length', default=32, type=int,
+    parser.add_argument('--max_length', default=25, type=int,
                         help='max length of a caption, in number of words. captions longer than this get clipped.')
-    parser.add_argument('--images_root', default='/home/vtt/dataset/ai_challenger',
+    parser.add_argument('--images_root', default='../data/ai_challenger',
                         help='root location in which images are stored, to be prepended to file_path in input json')
     parser.add_argument('--word_count_threshold', default=5, type=int,
                         help='only words that occur more than this number of times will be put in vocab')
