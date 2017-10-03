@@ -43,16 +43,14 @@ def convert2coco(caption_json, img_dir):
                 not_empty = s
                 break
 
-        idx = 0
-        for s in sample['caption']:
+        for i, s in enumerate(sample['caption']):
             if len(s) == 0:
                 print('error: some caption had no words?')
                 print(coco_img[u'file_name'])
                 # sample['caption'][idx] = sample['caption'][idx-1]
-                sample['caption'][idx] = not_empty
+                sample['caption'][i] = not_empty
                 print(sample['caption'])
                 # break
-            idx = idx + 1
         """up add by ffz"""
         coco_anno[u'caption'] = sample['caption']
 
@@ -93,7 +91,7 @@ def convert2coco_val(caption_json, img_dir):
         coco_anno = {}
         coco_anno[u'image_id'] = os.path.splitext(os.path.basename(sample['image_id']))[0]
         coco_anno[u'id'] = os.path.splitext(os.path.basename(sample['image_id']))[0]
-        idx = 0
+        
         """below add by ffz"""
         for s in sample['caption']:
             if len(s)!=0:
@@ -102,16 +100,15 @@ def convert2coco_val(caption_json, img_dir):
                 break
         """up add by ffz"""
 
-        for s in sample['caption']:
+        for i,s in enumerate(sample['caption']):
             if len(s)==0:
                 print('error: some caption had no words?')
                 print(coco_img[u'file_name'])
                 #sample['caption'][idx] = sample['caption'][idx-1]
                 """modify by ffz"""
-                sample['caption'][idx] = not_empty
+                sample['caption'][i] = not_empty
                 print(str(sample['caption']).decode('unicode_escape'))
                 #break
-            idx = idx+1
 
         coco_anno[u'caption'] = sample['caption']
         coco[u'images'].append(coco_img)
@@ -238,12 +235,12 @@ def ai_challenger_preprocess():
         split = 'train' if 'train' in img['file_name'] else 'val'
         annotsi = itoa[img['id']]
         #sentid = 0
-        out_im['cocoid'] = img['id']
-        out_im['filename'] = os.path.basename(img['file_name'])
+        out_im['id'] = img['id']
+        out_im['file_name'] = os.path.basename(img['file_name'])
         if 'val' in img['file_name']:
-            out_im['filepath'] = 'ai_challenger_caption_validation_20170910/caption_validation_images_20170910'
+            out_im['file_path'] = 'ai_challenger_caption_validation_20170910/caption_validation_images_20170910'
         else:
-            out_im['filepath'] = 'ai_challenger_caption_train_20170902/caption_train_images_20170902'
+            out_im['file_path'] = 'ai_challenger_caption_train_20170902/caption_train_images_20170902'
 
         out_im['captions']=annotsi['caption']
         out_im['split'] = split

@@ -56,10 +56,10 @@ def prepro_captions(imgs):
         for j, s in enumerate(img['captions']):
             '''modified by ffz'''
             #for sentence in s:
-            txt= list(jieba.cut(s))
+            txt= list(jieba.cut(s, cut_all=False))
             #txt = str(s).lower().translate(None, string.punctuation).strip().split()
             img['processed_tokens'].append(txt)
-            if i < 10 and j == 0: print str(txt).decode('unicode_escape')
+            if i < 3: print str(txt).decode('unicode_escape')
 
 
 def build_vocab(imgs, params):
@@ -125,7 +125,7 @@ def assign_splits(imgs, params):
   num_test = params['num_test']
 
   for i,img in enumerate(imgs):
-      if 'val' in img['filepath']:
+      if 'val' in img['file_path']:
         img['split'] = 'val'
       else:
         img['split'] = 'train'
@@ -226,7 +226,7 @@ def main(params):
     dset_att = f_att.create_dataset("att", (N, 14, 14, 2048), dtype='float32')
     for i, img in enumerate(imgs):
         # load the image
-        I = skimage.io.imread(os.path.join(os.path.join(params['images_root'], img['filepath']), img['filename']))
+        I = skimage.io.imread(os.path.join(os.path.join(params['images_root'], img['file_path']), img['file_name']))
         # handle grayscale input images
         if len(I.shape) == 2:
             I = I[:, :, np.newaxis]
@@ -253,7 +253,7 @@ def main(params):
 
         jimg = {}
         jimg['split'] = img['split']
-        if 'filepath' in img: jimg['filepath'] = img['filepath']  # copy it over, might need
+        if 'file_path' in img: jimg['file_path'] = img['file_path']  # copy it over, might need
         if 'id' in img: jimg['id'] = img['id']  # copy over & mantain an id, if present (e.g. coco ids, useful)
 
         out['images'].append(jimg)
