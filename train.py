@@ -100,7 +100,8 @@ def train(opt):
         start = time.time()
         # Load data from train split (0)
         data = loader.get_batch('train')
-        print('Read data:', time.time() - start)
+        if iteration % 200 == 0:
+            print('Read data:', time.time() - start)
 
         torch.cuda.synchronize()
         start = time.time()
@@ -110,15 +111,18 @@ def train(opt):
         fc_feats, att_feats, labels, masks = tmp
         
         optimizer.zero_grad()
+        #print(fc_feats.size(), att_feats.size(), labels.size())
         loss = crit(model(fc_feats, att_feats, labels), labels[:,1:], masks[:,1:])
+        #loss = crit(model(fc_feats, att_feats, labels), labels[:,:], masks[:,:])
         loss.backward()
         utils.clip_gradient(optimizer, opt.grad_clip)
         optimizer.step()
         train_loss = loss.data[0]
         torch.cuda.synchronize()
         end = time.time()
-        print("iter {} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}" \
-            .format(iteration, epoch, train_loss, end - start))
+        if iteration%200 == 0:
+            print("iter {} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}" \
+                .format(iteration, epoch, train_loss, end - start))
 
         # Update the iteration and epoch
         iteration += 1

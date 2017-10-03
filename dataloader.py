@@ -31,7 +31,8 @@ class DataLoader():
         return self.vocab_size
 
     def get_vocab(self):
-        vocabulary = self.ex_vocab['rt_topdown_vocab'] if self.exchange_vocab else self.ix_to_word
+        #vocabulary = self.ex_vocab['rt_topdown_vocab'] if self.ex_vocab else self.ix_to_word
+        vocabulary = self.ix_to_word
         return vocabulary
 
     def get_seq_length(self):
@@ -87,14 +88,16 @@ class DataLoader():
         print('assigned %d images to split test' %len(self.split_ix['test']))
 
         self.iterators = {'train': 0, 'val': 0, 'test': 0}
-
+    '''
     def get_batch(self, split, batch_size=None, seq_per_img=None):
         split_ix = self.split_ix[split]
         batch_size = batch_size or self.batch_size
         seq_per_img = seq_per_img or self.seq_per_img
 
-        fc_batch = np.ndarray((batch_size, self.fc_feat_size), dtype = 'float32') if self.pre_ft else None
-        att_batch = np.ndarray((batch_size, 14, 14, self.att_feat_size), dtype = 'float32') if self.pre_ft and self.att_im else None
+        #fc_batch = np.ndarray((batch_size, self.fc_feat_size), dtype = 'float32') if self.pre_ft else None
+        #att_batch = np.ndarray((batch_size, 14, 14, self.att_feat_size), dtype = 'float32') if self.pre_ft and self.att_im else None
+        fc_batch = np.ndarray((batch_size * self.seq_per_img, self.fc_feat_size), dtype = 'float32')
+        att_batch = np.ndarray((batch_size * self.seq_per_img, 14, 14, self.att_feat_size), dtype = 'float32')
         label_batch = np.zeros([batch_size * self.seq_per_img, self.seq_length + 2], dtype = 'int')
         mask_batch = np.zeros([batch_size * self.seq_per_img, self.seq_length + 2], dtype = 'float32')
 
@@ -169,6 +172,92 @@ class DataLoader():
         gc.collect()
 
         return data
+    '''
+
+    def get_batch(self, split, batch_size=None, seq_per_img=None):
+        split_ix = self.split_ix[split]
+        batch_size = batch_size or self.batch_size
+        seq_per_img = seq_per_img or self.seq_per_img
+
+        fc_batch = []  # np.ndarray((batch_size * seq_per_img, self.opt.fc_feat_size), dtype = 'float32')
+        att_batch = []  # np.ndarray((batch_size * seq_per_img, 14, 14, self.opt.att_feat_size), dtype = 'float32')
+        label_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype='int')
+        mask_batch = np.zeros([batch_size * seq_per_img, self.seq_length + 2], dtype='float32')
+
+        max_index = len(split_ix)
+        wrapped = False
+
+        infos = []
+        gts = []
+
+        for i in range(batch_size):
+            import time
+            t_start = time.time()
+            # fetch image
+
+            ri = self.iterators[split]
+            ri_next = ri + 1
+            if ri_next >= max_index:
+                ri_next = 0
+                wrapped = True
+            self.iterators[split] = ri_next
+            ix = split_ix[ri]
+
+            # fetch image
+            tmp_fc = self.h5_fc_file['fc'][ix, :]
+            tmp_att = self.h5_att_file['att'][ix, :, :, :]
+
+            fc_batch += [tmp_fc] * seq_per_img
+            att_batch += [tmp_att] * seq_per_img
+
+            # fetch the sequence labels
+            ix1 = self.label_start_ix[ix] - 1  # label_start_ix starts from 1
+            ix2 = self.label_end_ix[ix] - 1
+            ncap = ix2 - ix1 + 1  # number of captions available for this image
+            assert ncap > 0, 'an image does not have any label. this can be handled but right now isn\'t'
+
+            if ncap < seq_per_img:
+                # we need to subsample (with replacement)
+                seq = np.zeros([seq_per_img, self.seq_length], dtype='int')
+                for q in range(seq_per_img):
+                    ixl = random.randint(ix1, ix2)
+                    seq[q, :] = self.h5_label_file['labels'][ixl, :self.seq_length]
+            else:
+                ixl = random.randint(ix1, ix2 - seq_per_img + 1)
+                seq = self.h5_label_file['labels'][ixl: ixl + seq_per_img, :self.seq_length]
+
+            label_batch[i * seq_per_img: (i + 1) * seq_per_img, 1: self.seq_length + 1] = seq
+
+
+            # Used for reward evaluation
+            gts.append(self.h5_label_file['labels'][self.label_start_ix[ix] - 1: self.label_end_ix[ix]])
+
+            # record associated info as well
+            info_dict = {}
+            info_dict['ix'] = ix
+            info_dict['id'] = self.info['images'][ix]['id']
+            info_dict['file_path'] = self.info['images'][ix]['file_path']
+            infos.append(info_dict)
+            # print(i, time.time() - t_start)
+
+        # generate mask
+        t_start = time.time()
+        nonzeros = np.array(list(map(lambda x: (x != 0).sum() + 2, label_batch)))
+        for ix, row in enumerate(mask_batch):
+            row[:nonzeros[ix]] = 1
+
+        data = {}
+        data['fc_feats'] = np.stack(fc_batch)
+        data['att_feats'] = np.stack(att_batch)
+        data['labels'] = label_batch
+        data['gts'] = gts
+        data['masks'] = mask_batch
+        data['bounds'] = {'it_pos_now': self.iterators[split], 'it_max': len(self.split_ix[split]), 'wrapped': wrapped}
+        data['infos'] = infos
+
+        gc.collect()
+
+        return data
 
 
 class DataLoader_pool(data.Dataset):
@@ -201,11 +290,11 @@ class DataLoader_pool(data.Dataset):
         print('vocab size is ', self.vocab_size)
         
         # open the hdf5 file
-        print('DataLoader loading h5 file: ', opt.input_fc_dir, opt.input_att_dir, opt.input_label_h5)
+        print('DataLoader loading h5 file: ', opt.input_fc_h5, opt.input_att_h5, opt.input_label_h5)
         self.h5_label_file = h5py.File(self.opt.input_label_h5, 'r', driver='core')
 
-        self.input_fc_dir = self.opt.input_fc_dir
-        self.input_att_dir = self.opt.input_att_dir
+        self.input_fc_dir = self.opt.input_fc_h5
+        self.input_att_dir = self.opt.input_att_h5
 
         # load in the sequence data
         seq_size = self.h5_label_file['labels'].shape
@@ -299,7 +388,7 @@ class DataLoader_pool(data.Dataset):
             info_dict = {}
             info_dict['ix'] = ix
             info_dict['id'] = self.info['images'][ix]['id']
-            info_dict['file_path'] = self.info['images'][ix]['file_path']
+            info_dict['file_path'] = self.info['images'][ix]['filepath']
             infos.append(info_dict)
             #print(i, time.time() - t_start)
 

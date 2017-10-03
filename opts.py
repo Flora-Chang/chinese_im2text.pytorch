@@ -3,13 +3,13 @@ import argparse
 def parse_opt():
     parser = argparse.ArgumentParser()
     # Data input settings
-    parser.add_argument('--input_json', type=str, default='data/coco.json',
+    parser.add_argument('--input_json', type=str, default='data/ai_challenger/coco_ai_challenger_talk.json',
                     help='path to the json file containing additional info and vocab')
-    parser.add_argument('--input_fc_h5', type=str, default='data/coco_ai_challenger_talk_fc.h5',
+    parser.add_argument('--input_fc_h5', type=str, default='data/ai_challenger/coco_ai_challenger_talk_resnet101_fc.h5',
                     help='path to the directory containing the preprocessed fc feats')
-    parser.add_argument('--input_att_h5', type=str, default='data/coco_ai_challenger_talk_att.h5',
+    parser.add_argument('--input_att_h5', type=str, default='data/ai_challenger/coco_ai_challenger_talk_resnet101_att.h5',
                     help='path to the directory containing the preprocessed att feats')
-    parser.add_argument('--input_label_h5', type=str, default='data/coco_ai_challenger_talk_label.h5',
+    parser.add_argument('--input_label_h5', type=str, default='data/ai_challenger/coco_ai_challenger_talk_resnet101_label.h5',
                     help='path to the h5file containing the preprocessed dataset')
     parser.add_argument('--start_from', type=str, default=None,
                     help="""continue training from saved model at this path. Path must contain files saved by previous training process: 
@@ -82,9 +82,9 @@ def parse_opt():
 
 
     # Evaluation/Checkpointing
-    parser.add_argument('--val_images_use', type=int, default=3200,
+    parser.add_argument('--val_images_use', type=int, default=30000,
                     help='how many images to use when periodically evaluating the validation loss? (-1 = all)')
-    parser.add_argument('--save_checkpoint_every', type=int, default=2500,
+    parser.add_argument('--save_checkpoint_every', type=int, default=3000,
                     help='how often to save a model checkpoint (in iterations)?')
     parser.add_argument('--checkpoint_path', type=str, default='save',
                     help='directory to store checkpointed models')

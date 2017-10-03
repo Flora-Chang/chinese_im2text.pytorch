@@ -44,8 +44,7 @@ def language_eval_chinese(dataset, preds, model_id, split):
 
     # print output evaluation scores
     for metric, score in coco_eval.eval.items():
-        print
-        '%s: %.3f' % (metric, score)
+        print('%s: %.3f' % (metric, score))
         m1_score[metric] = score
 
     return m1_score
@@ -112,6 +111,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
     loss_sum = 0
     loss_evals = 1e-8
     predictions = []
+    count = 0
     while True:
         data = loader.get_batch(split)
         n = n + loader.batch_size
@@ -149,8 +149,10 @@ def eval_split(model, crit, loader, eval_kwargs={}):
                 print(cmd)
                 os.system(cmd)
 
-            if verbose:
+            if verbose and count < 10 :
                 print('image %s: %s' %(entry['image_id'], entry['caption']))
+                count += 1
+                break
 
         # if we wrapped around the split or used up val imgs budget then bail
         ix0 = data['bounds']['it_pos_now']
@@ -160,7 +162,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         for i in range(n - ix1):
             predictions.pop()
 
-        if verbose:
+        if verbose and count < 10:
             print('evaluating validation preformance... %d/%d (%f)' %(ix0 - 1, ix1, loss))
 
         if data['bounds']['wrapped']:
@@ -171,6 +173,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
     lang_stats = None
     if lang_eval == 1:
         lang_stats = language_eval_chinese(dataset, predictions, eval_kwargs['id'], split)
+        print("lang_stats: ", lang_stats)
 
     # Switch back to training mode
     model.train()
